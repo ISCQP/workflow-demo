@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="IRIS" version="26" zv="IRIS for Windows (x86-64) 2021.1 (Build 194U)" ts="2022-04-25 13:35:21">
+<Class name="Demo.BO.DrugMLService">
+<Super>Ens.BusinessOperation</Super>
+<TimeChanged>66223,64524.807423</TimeChanged>
+<TimeCreated>66221,61563.132708</TimeCreated>
+
+<Parameter name="INVOCATION">
+<Default>Queue</Default>
+</Parameter>
+
+<Method name="CheckDB">
+<FormalSpec>pRequest:Demo.MSG.ReqCheckDrugDB,*pResponse:Demo.MSG.ResCheckDrugDB</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+    Set pResponse = ##class(Demo.MSG.ResCheckDrugDB).%New()
+    Set pResponse.Level = 0
+    
+    If (pRequest.Diagnoses["糖尿病") 
+    && (pRequest.Drug="美托洛尔")
+    {
+        Set pResponse.Level = 1
+        Set pResponse.Alert = "β受体阻滞剂药物对血糖和血脂的代谢也有不良影响"
+    }
+    Quit $$$OK
+]]></Implementation>
+</Method>
+
+<XData name="MessageMap">
+<Data><![CDATA[
+<MapItems>
+    <MapItem MessageType="Demo.MSG.ReqCheckDrugDB"> 
+        <Method>CheckDB</Method>
+    </MapItem>
+</MapItems>
+]]></Data>
+</XData>
+</Class>
+
+
+<Class name="Demo.BO.Pharmacy">
+<Super>Ens.BusinessOperation</Super>
+<TimeChanged>66223,71494.801648</TimeChanged>
+<TimeCreated>66223,71494.801648</TimeCreated>
+
+<Parameter name="INVOCATION">
+<Default>Queue</Default>
+</Parameter>
+
+<Method name="ReceivePrescription">
+<FormalSpec>pRequest:EnsLib.HL7.Message,*pResponse:Ens.Response</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[    Quit $$$OK
+]]></Implementation>
+</Method>
+
+<XData name="MessageMap">
+<Data><![CDATA[
+<MapItems>
+    <MapItem MessageType="EnsLib.HL7.Message"> 
+        <Method>ReceivePrescription</Method>
+    </MapItem>
+</MapItems>
+]]></Data>
+</XData>
+</Class>
+
+
+<Class name="Demo.BP.Workflow">
+<Description>
+</Description>
+<Super>Ens.BusinessProcessBPL</Super>
+<TimeChanged>66224,48869.118378</TimeChanged>
+<TimeCreated>66221,58677.469097</TimeCreated>
+
+<Storage name="Default">
+<Type>%Storage.Persistent</Type>
+</Storage>
+
+<XData name="BPL">
+<Description>
+BPL Definition</Description>
+<XMLNamespace>http://www.intersystems.com/bpl</XMLNamespace>
+<Data><![CDATA[
+<process language='objectscript' request='EnsLib.HL7.Message' response='Ens.StringResponse' height='2000' width='2000' >
+<context>
+<property name='DrugAlert' type='%String' instantiate='0' >
+<parameters>
+<parameter name='MAXLEN'  value='500' />
+</parameters>
+</property>
+<property name='DrugAlertLevel' type='%Integer' initialexpression='0' instantiate='0' />
+<property name='PharmacistDecision' type='%String' instantiate='0' >
+<parameters>
+<parameter name='MAXLEN'  value='50' />
+</parameters>
+</property>
+<property name='Diagnoses' type='%String' instantiate='0' >
+<parameters>
+<parameter name='MAXLEN'  value='250' />
+</parameters>
+</property>
+<property name='Drug' type='%String' instantiate='0' >
+<parameters>
+<parameter name='MAXLEN'  value='50' />
+</parameters>
+</property>
+<property name='Msg4DrugDB' type='Demo.MSG.ReqCheckDrugDB' instantiate='0' />
+</context>
+<sequence xend='200' yend='900' >
+<transform name='药品知识库数据转换' class='Demo.DT.HL7toDrugDB' source='request' target='context.Msg4DrugDB' xpos='200' ypos='250' />
+<call name='查询药品知识库' target='药品知识库' async='0' xpos='200' ypos='350' >
+<request type='Demo.MSG.ReqCheckDrugDB' >
+<assign property="callrequest" value="context.Msg4DrugDB" action="set" />
+</request>
+<response type='Demo.MSG.ResCheckDrugDB' >
+<assign property="context.DrugAlert" value="callresponse.Alert" action="set" />
+<assign property="context.DrugAlertLevel" value="callresponse.Level" action="set" />
+</response>
+</call>
+<if name='有药品风险提示？' condition='context.DrugAlertLevel&apos;=0' xpos='200' ypos='450' xend='200' yend='800' >
+<true>
+<empty name='带实现药剂师任务' xpos='200' ypos='600' />
+</true>
+<false>
+<label name='药房' xpos='470' ypos='600' >
+<annotation><![CDATA[发送到药房系统]]]]><![CDATA[></annotation>
+</label>
+<call name='通知药房系统' target='药房系统' async='1' xpos='470' ypos='700' >
+<request type='EnsLib.HL7.Message' >
+<assign property="callrequest" value="request" action="set" />
+</request>
+<response type='Ens.Response' />
+</call>
+</false>
+</if>
+</sequence>
+</process>
+]]></Data>
+</XData>
+</Class>
+
+
+<Class name="Demo.DT.HL7toDrugDB">
+<Super>Ens.DataTransformDTL</Super>
+<TimeChanged>66223,59216.922276</TimeChanged>
+<TimeCreated>66223,55325.873114</TimeCreated>
+<DependsOn>EnsLib.HL7.Message,Demo.MSG.ReqCheckDrugDB</DependsOn>
+
+<Parameter name="IGNOREMISSINGSOURCE">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="REPORTERRORS">
+<Default>1</Default>
+</Parameter>
+
+<Parameter name="TREATEMPTYREPEATINGFIELDASNULL">
+<Default>0</Default>
+</Parameter>
+
+<XData name="DTL">
+<XMLNamespace>http://www.intersystems.com/dtl</XMLNamespace>
+<Data><![CDATA[
+<transform sourceClass='EnsLib.HL7.Message' targetClass='Demo.MSG.ReqCheckDrugDB' sourceDocType='2.5.1:OMG_O19' create='new' language='objectscript' >
+<assign value='source.{ORCgrp(1).OBR:UniversalServiceIdentifier.Text}' property='target.Drug' action='set' />
+<foreach property='source.{ORCgrp(1).DG1()}' key='k1' >
+<assign value='target.Diagnoses_","_source.{ORCgrp(1).DG1(k1):DiagnosisDescription}' property='target.Diagnoses' action='set' />
+</foreach>
+</transform>
+]]></Data>
+</XData>
+</Class>
+
+
+<Class name="Demo.MSG.ReqCheckDrugDB">
+<Super>Ens.Request</Super>
+<TimeChanged>66223,54407.834124</TimeChanged>
+<TimeCreated>66223,51807.946464</TimeCreated>
+
+<Property name="Drug">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="500"/>
+</Property>
+
+<Property name="Diagnoses">
+<Type>%String</Type>
+</Property>
+
+<Storage name="Default">
+<Type>%Storage.Persistent</Type>
+<DefaultData>ReqCheckDrugDBDefaultData</DefaultData>
+<Data name="ReqCheckDrugDBDefaultData">
+<Structure>listnode</Structure>
+<Subscript>"ReqCheckDrugDB"</Subscript>
+<Value name="1">
+<Value>Drug</Value>
+</Value>
+<Value name="2">
+<Value>Diagnoses</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+
+<Class name="Demo.MSG.ResCheckDrugDB">
+<Super>Ens.Response</Super>
+<TimeChanged>66223,51951.48009</TimeChanged>
+<TimeCreated>66223,51951.048486</TimeCreated>
+
+<Property name="Level">
+<Type>%Integer</Type>
+</Property>
+
+<Property name="Alert">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="500"/>
+</Property>
+
+<Storage name="Default">
+<Type>%Storage.Persistent</Type>
+<DefaultData>ResCheckDrugDBDefaultData</DefaultData>
+<Data name="ResCheckDrugDBDefaultData">
+<Structure>listnode</Structure>
+<Subscript>"ResCheckDrugDB"</Subscript>
+<Value name="1">
+<Value>Level</Value>
+</Value>
+<Value name="2">
+<Value>Alert</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+
+<Class name="Demo.Prod.Workflow">
+<Super>Ens.Production</Super>
+<TimeChanged>66223,71580.148544</TimeChanged>
+<TimeCreated>66221,51706.050987</TimeCreated>
+
+<XData name="ProductionDefinition">
+<Data><![CDATA[
+<Production Name="Demo.Prod.Workflow" LogGeneralTraceEvents="false">
+  <Description></Description>
+  <ActorPoolSize>2</ActorPoolSize>
+  <Item Name="药剂师" Category="" ClassName="EnsLib.Workflow.Operation" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="false" Schedule="">
+    <Setting Target="Host" Name="AutoCreateRole">1</Setting>
+  </Item>
+  <Item Name="业务流程" Category="" ClassName="Demo.BP.Workflow" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="false" Schedule="">
+  </Item>
+  <Item Name="HL7消息源" Category="" ClassName="EnsLib.HL7.Service.FileService" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="false" Schedule="">
+    <Setting Target="Host" Name="MessageSchemaCategory">2.5.1</Setting>
+    <Setting Target="Adapter" Name="FilePath">C:\Temp\hl7v2\</Setting>
+    <Setting Target="Adapter" Name="ArchivePath">C:\Temp\hl7v2\Archive</Setting>
+    <Setting Target="Adapter" Name="FileSpec">*</Setting>
+    <Setting Target="Host" Name="AckTargetConfigNames">业务流程</Setting>
+    <Setting Target="Host" Name="DefCharEncoding">utf-8</Setting>
+    <Setting Target="Host" Name="TargetConfigNames">业务流程</Setting>
+    <Setting Target="Adapter" Name="Charset">utf-8</Setting>
+  </Item>
+  <Item Name="药品知识库" Category="" ClassName="Demo.BO.DrugMLService" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="false" Schedule="">
+  </Item>
+  <Item Name="药房系统" Category="" ClassName="Demo.BO.Pharmacy" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="false" Schedule="">
+  </Item>
+</Production>
+]]></Data>
+</XData>
+</Class>
+</Export>
